@@ -1,263 +1,335 @@
-#import <UIKit/UIKit.h>
-#import <QuartzCore/QuartzCore.h>
-#import <CoreGraphics/CoreGraphics.h>
-#import <Foundation/Foundation.h>
-#import <AudioToolbox/AudioToolbox.h>
+<!-- palofsc: FLU FF CYBER MENU - FOV & ESP (đã sửa lỗi) -->
+<!-- Sửa: thiếu dấu xuống dòng trước function drawFOV(), thiếu classList toggle -->
+<!-- Lưu thành .html, mở trình duyệt để xem giao diện -->
 
-// Project headers
-#import "Includes/Vector3.h"
-#import "Includes/Vector2.h"
-#import "Includes/Quaternion.h"
-#import "Includes/UnityTypes.h"
-#import "Includes/MemoryUtils.h"
-#import "Includes/ESP.h"
-#import "Includes/Encryption.h"
-
-#define kWidth  [UIScreen mainScreen].bounds.size.width
-#define kHeight [UIScreen mainScreen].bounds.size.height
-
-// Minimalist Colors
-#define COLOR_BG [UIColor colorWithWhite:0.05 alpha:0.92]
-#define COLOR_ACCENT [UIColor colorWithRed:1.0 green:0.0 blue:0.0 alpha:1.0] // Red Accent
-#define COLOR_TEXT [UIColor whiteColor]
-#define COLOR_BTN_OFF [UIColor colorWithWhite:0.15 alpha:1.0]
-
-@interface BrazilixMenu : NSObject
-@property (nonatomic, strong) UIView *menuView;
-@property (nonatomic, strong) UIScrollView *scrollView;
-@property (nonatomic, strong) UIButton *enableCheatsButton;
-@property (nonatomic, strong) UIButton *boxESPButton;
-@property (nonatomic, strong) UIButton *linesESPButton;
-@property (nonatomic, strong) UIButton *nameButton;
-@property (nonatomic, strong) UIButton *healthButton;
-@property (nonatomic, strong) UIButton *distanceButton;
-@property (nonatomic, strong) UIButton *skeletonButton;
-@property (nonatomic, strong) UIButton *countButton;
-@property (nonatomic, strong) UILabel *titleLabel;
-@property (nonatomic, strong) CADisplayLink *displayLink;
-@property (nonatomic, assign) CGPoint lastPoint;
-@end
-
-@implementation BrazilixMenu
-
-static BrazilixMenu *extraInfo;
-static BOOL MenDeal;
-UIWindow *mainWindow;
-game_sdk_t *game_sdk = new game_sdk_t();
-
-+ (void)load {
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        mainWindow = [UIApplication sharedApplication].keyWindow;
-        extraInfo = [BrazilixMenu new];
-        
-        static bool sdkInitialized = false;
-        if (!sdkInitialized) {
-            game_sdk->init();
-            sdkInitialized = true;
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FLU FF CYBER MENU - FOV & ESP</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a0f;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
         }
-        
-        [extraInfo setupDisplayLink];
-        [extraInfo initTapGes];
-    });
-}
 
-- (void)setupDisplayLink {
-    _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(updateMenu)];
-    [_displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
-}
+        /* Canvas vẽ vòng FOV */
+        #fovCanvas {
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            pointer-events: none;
+            z-index: 1;
+        }
 
-- (void)setupMenu {
-    CGFloat menuWidth = 220;
-    CGFloat menuHeight = 320;
-    CGFloat x = (kWidth - menuWidth) * 0.5f;
-    CGFloat y = (kHeight - menuHeight) * 0.5f;
-    
-    _menuView = [[UIView alloc] initWithFrame:CGRectMake(x, y, menuWidth, menuHeight)];
-    _menuView.backgroundColor = COLOR_BG;
-    _menuView.layer.cornerRadius = 12.0f;
-    _menuView.layer.borderWidth = 0.5f;
-    _menuView.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.2].CGColor;
-    _menuView.clipsToBounds = YES;
-    _menuView.hidden = YES;
-    _menuView.userInteractionEnabled = YES;
-    
-    UIPanGestureRecognizer *panGesture = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePan:)];
-    [_menuView addGestureRecognizer:panGesture];
-    
-    [mainWindow addSubview:_menuView];
-    
-    _titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 10, menuWidth, 25)];
-    _titleLabel.text = @"BRAZILIX OPTIMIZED";
-    _titleLabel.textColor = COLOR_TEXT;
-    _titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightBold];
-    _titleLabel.textAlignment = NSTextAlignmentCenter;
-    [_menuView addSubview:_titleLabel];
-    
-    _scrollView = [[UIScrollView alloc] initWithFrame:CGRectMake(0, 45, menuWidth, menuHeight - 55)];
-    _scrollView.showsVerticalScrollIndicator = NO;
-    [_menuView addSubview:_scrollView];
-    
-    CGFloat btnY = 0;
-    CGFloat btnH = 32;
-    CGFloat btnGap = 6;
-    CGFloat btnX = 12;
-    CGFloat btnW = menuWidth - 24;
-    
-    _enableCheatsButton = [self createButtonWithTitle:@"Master Switch" frame:CGRectMake(btnX, btnY, btnW, btnH)];
-    [_enableCheatsButton addTarget:self action:@selector(toggleEnable) forControlEvents:UIControlEventTouchUpInside];
-    [_scrollView addSubview:_enableCheatsButton];
-    btnY += btnH + btnGap;
-    
-    _boxESPButton = [self createButtonWithTitle:@"Box" frame:CGRectMake(btnX, btnY, btnW, btnH)];
-    [_boxESPButton addTarget:self action:@selector(toggleBox) forControlEvents:UIControlEventTouchUpInside];
-    [_scrollView addSubview:_boxESPButton];
-    btnY += btnH + btnGap;
-    
-    _linesESPButton = [self createButtonWithTitle:@"Lines" frame:CGRectMake(btnX, btnY, btnW, btnH)];
-    [_linesESPButton addTarget:self action:@selector(toggleLines) forControlEvents:UIControlEventTouchUpInside];
-    [_scrollView addSubview:_linesESPButton];
-    btnY += btnH + btnGap;
-    
-    _nameButton = [self createButtonWithTitle:@"Names" frame:CGRectMake(btnX, btnY, btnW, btnH)];
-    [_nameButton addTarget:self action:@selector(toggleName) forControlEvents:UIControlEventTouchUpInside];
-    [_scrollView addSubview:_nameButton];
-    btnY += btnH + btnGap;
-    
-    _healthButton = [self createButtonWithTitle:@"Health" frame:CGRectMake(btnX, btnY, btnW, btnH)];
-    [_healthButton addTarget:self action:@selector(toggleHealth) forControlEvents:UIControlEventTouchUpInside];
-    [_scrollView addSubview:_healthButton];
-    btnY += btnH + btnGap;
-    
-    _distanceButton = [self createButtonWithTitle:@"Distance" frame:CGRectMake(btnX, btnY, btnW, btnH)];
-    [_distanceButton addTarget:self action:@selector(toggleDistance) forControlEvents:UIControlEventTouchUpInside];
-    [_scrollView addSubview:_distanceButton];
-    btnY += btnH + btnGap;
-    
-    _skeletonButton = [self createButtonWithTitle:@"Skeleton" frame:CGRectMake(btnX, btnY, btnW, btnH)];
-    [_skeletonButton addTarget:self action:@selector(toggleSkeleton) forControlEvents:UIControlEventTouchUpInside];
-    [_scrollView addSubview:_skeletonButton];
-    btnY += btnH + btnGap;
-    
-    _countButton = [self createButtonWithTitle:@"Enemy Count" frame:CGRectMake(btnX, btnY, btnW, btnH)];
-    [_countButton addTarget:self action:@selector(toggleCount) forControlEvents:UIControlEventTouchUpInside];
-    [_scrollView addSubview:_countButton];
-    btnY += btnH + btnGap;
-    
-    _scrollView.contentSize = CGSizeMake(menuWidth, btnY + 10);
-}
+        /* Khung bọc hiệu ứng viền LED chạy vòng quanh */
+        .menu-border-glow {
+            position: relative;
+            padding: 2px;
+            border-radius: 20px;
+            overflow: hidden;
+            background: rgba(0, 0, 0, 0.5);
+            box-shadow: 0 0 30px rgba(0, 242, 254, 0.2);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s ease;
+            transform: scale(0);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
 
-- (void)handlePan:(UIPanGestureRecognizer *)pan {
-    CGPoint translation = [pan translationInView:mainWindow];
-    if (pan.state == UIGestureRecognizerStateBegan) {
-        _lastPoint = _menuView.center;
-    }
-    _menuView.center = CGPointMake(_lastPoint.x + translation.x, _lastPoint.y + translation.y);
-}
+        .menu-border-glow.active {
+            transform: scale(1);
+            opacity: 1;
+            pointer-events: auto;
+        }
 
-- (UIButton *)createButtonWithTitle:(NSString *)title frame:(CGRect)frame {
-    UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
-    button.frame = frame;
-    button.backgroundColor = COLOR_BTN_OFF;
-    button.layer.cornerRadius = 6.0f;
-    [button setTitle:title forState:UIControlStateNormal];
-    [button setTitleColor:[UIColor colorWithWhite:0.8 alpha:1.0] forState:UIControlStateNormal];
-    button.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
-    return button;
-}
+        .menu-border-glow::before {
+            content: '';
+            position: absolute;
+            top: -50%; left: -50%; width: 200%; height: 200%;
+            background: conic-gradient(from 0deg, transparent, #ff007f, #00f2fe, transparent 60%);
+            animation: rotateRGB 4s linear infinite;
+            z-index: 1;
+        }
 
-- (void)updateMenu {
-    _menuView.hidden = !MenDeal;
-    
-    get_players();
+        @keyframes rotateRGB {
+            100% { transform: rotate(360deg); }
+        }
 
-    if (!MenDeal) return;
+        /* Ruột Menu chính */
+        .menu-wrapper {
+            position: relative;
+            z-index: 2;
+            width: 90vw;
+            max-width: 420px;
+            background: rgba(10, 10, 18, 0.98);
+            backdrop-filter: blur(25px);
+            border-radius: 18px;
+            padding: 15px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
 
-    [self updateButton:_enableCheatsButton forState:Vars.Enable];
-    
-    NSArray *buttons = @[_boxESPButton, _linesESPButton, _nameButton, _healthButton, _distanceButton, _skeletonButton, _countButton];
-    NSArray *states = @[@(Vars.Box), @(Vars.lines), @(Vars.Name), @(Vars.Health), @(Vars.Distance), @(Vars.skeleton), @(Vars.counts)];
-    
-    for (int i = 0; i < buttons.count; i++) {
-        UIButton *btn = buttons[i];
-        BOOL state = [states[i] boolValue];
-        btn.alpha = Vars.Enable ? 1.0f : 0.4f;
-        btn.userInteractionEnabled = Vars.Enable;
-        [self updateButton:btn forState:state];
-    }
-}
+        .brand {
+            font-weight: 900;
+            font-size: 16px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            background: linear-gradient(90deg, #ff007f, #00f2fe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 10px rgba(0, 242, 254, 0.4);
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 10px;
+        }
 
-- (void)updateButton:(UIButton *)button forState:(BOOL)state {
-    if (state) {
-        button.backgroundColor = [COLOR_ACCENT colorWithAlphaComponent:0.3];
-        [button setTitleColor:COLOR_ACCENT forState:UIControlStateNormal];
-    } else {
-        button.backgroundColor = COLOR_BTN_OFF;
-        [button setTitleColor:[UIColor colorWithWhite:0.8 alpha:1.0] forState:UIControlStateNormal];
-    }
-}
+        .menu-content {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
 
-#pragma mark - Toggle Actions
-- (void)toggleEnable { Vars.Enable = !Vars.Enable; }
-- (void)toggleBox { if (Vars.Enable) Vars.Box = !Vars.Box; }
-- (void)toggleLines { if (Vars.Enable) Vars.lines = !Vars.lines; }
-- (void)toggleName { if (Vars.Enable) Vars.Name = !Vars.Name; }
-- (void)toggleHealth { if (Vars.Enable) Vars.Health = !Vars.Health; }
-- (void)toggleDistance { if (Vars.Enable) Vars.Distance = !Vars.Distance; }
-- (void)toggleSkeleton { if (Vars.Enable) Vars.skeleton = !Vars.skeleton; }
-- (void)toggleCount { if (Vars.Enable) Vars.counts = !Vars.counts; }
+        .menu-item {
+            background: linear-gradient(135deg, #151525, #0d0d18);
+            border-radius: 12px;
+            padding: 10px 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s;
+        }
 
-- (void)closeMenu { MenDeal = false; }
+        .menu-item:hover {
+            border-color: rgba(0, 242, 254, 0.3);
+        }
 
-#pragma mark - Gesture Handling
-- (void)initTapGes {
-    UITapGestureRecognizer *tap1 = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(openMenu)];
-    tap1.numberOfTapsRequired = 2;
-    tap1.numberOfTouchesRequired = 3;
-    [mainWindow addGestureRecognizer:tap1];
-    
-    UITapGestureRecognizer *tap2 = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(closeMenu)];
-    tap2.numberOfTapsRequired = 2;
-    tap2.numberOfTouchesRequired = 2;
-    [mainWindow addGestureRecognizer:tap2];
-}
+        .item-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
 
-- (void)openMenu {
-    if (!_menuView) [self setupMenu];
-    MenDeal = true;
-}
+        .menu-item .icon { font-size: 18px; }
+        .menu-item .label {
+            font-size: 13px;
+            color: #e0e0e3;
+            font-weight: 600;
+        }
 
-- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    if (!MenDeal) return;
-    UITouch *touch = [touches anyObject];
-    if (!CGRectContainsPoint(_menuView.frame, [touch locationInView:mainWindow])) [self closeMenu];
-}
+        .fov-container {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+            padding: 12px;
+            border: 1px dashed rgba(0, 242, 254, 0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
 
-@end
+        .fov-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #00f2fe;
+            font-weight: bold;
+        }
 
-// OB53 OFFSETS - UnityFramework
-void game_sdk_t::init()
-{
-    this->Curent_Match = (void *(*)())getRealOffset(0x4E355B0);
-    this->GetLocalPlayer = (void *(*)(void *))getRealOffset(0x4C5A64C);
-    this->get_position = (Vector3(*)(void *))getRealOffset(0x8552BAC);
-    this->Component_GetTransform = (void *(*)(void *))getRealOffset(0x854060C);
-    this->get_camera = (void *(*)())getRealOffset(0x84E7148);
-    this->WorldToScreenPoint = (Vector3(*)(void *, Vector3))getRealOffset(0x84E6AC8);
-    this->GetForward = (Vector3(*)(void *))getRealOffset(0x85534CC);
-    this->get_isLocalTeam = (bool (*)(void *))getRealOffset(0x4A38D90);
-    this->get_IsDieing = (bool (*)(void *))getRealOffset(0x4A02EA8);
-    this->get_MaxHP = (int (*)(void *))getRealOffset(0x4A8489C);
-    this->GetHp = (int (*)(void *))getRealOffset(0x4A8478C);
-    this->name = (monoString * (*)(void *player))getRealOffset(0x4A16D38);
+        .range-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: #252535;
+            border-radius: 5px;
+            outline: none;
+        }
 
-    this->_GetHeadPositions = (void *(*)(void *))getRealOffset(0x4AA1A28);
-    this->_newHipMods = (void *(*)(void *))getRealOffset(0x4AA1BD8);
-    this->_GetLeftAnkleTF = (void *(*)(void *))getRealOffset(0x4AA2028);
-    this->_GetRightAnkleTF = (void *(*)(void *))getRealOffset(0x4AA2134);
-    this->_GetLeftToeTF = (void *(*)(void *))getRealOffset(0x4AA2240);
-    this->_GetRightToeTF = (void *(*)(void *))getRealOffset(0x4AA234C);
-    this->_getLeftHandTF = (void *(*)(void *))getRealOffset(0x4A1B9B4);
-    this->_getRightHandTF = (void *(*)(void *))getRealOffset(0x4A1BAB8);
-    this->_getLeftForeArmTF = (void *(*)(void *))getRealOffset(0x4A1BBBC);
-    this->_getRightForeArmTF = (void *(*)(void *))getRealOffset(0x4A1BCC0);
-}
+        .range-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #00f2fe;
+            box-shadow: 0 0 8px #00f2fe;
+            cursor: pointer;
+        }
+
+        .switch { position: relative; width: 34px; height: 18px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #252535; border-radius: 20px; transition: 0.3s;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .slider:before {
+            position: absolute; content: ""; height: 12px; width: 12px;
+            left: 2px; bottom: 2px; background-color: #777; border-radius: 50%;
+            transition: 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+        input:checked + .slider {
+            background-color: rgba(0, 242, 254, 0.1); border-color: #00f2fe;
+            box-shadow: 0 0 10px rgba(0, 242, 254, 0.4);
+        }
+        input:checked + .slider:before {
+            transform: translateX(16px); background-color: #00f2fe; box-shadow: 0 0 8px #00f2fe;
+        }
+
+        .hint-text {
+            position: absolute; bottom: 20px; color: rgba(255, 255, 255, 0.3);
+            font-size: 11px; letter-spacing: 1px; pointer-events: none; transition: opacity 0.5s;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="fovCanvas"></canvas>
+
+    <div class="hint-text" id="hint">✌️ Chạm 2 ngón tay cùng lúc để bật/tắt menu FLU</div>
+
+    <div class="menu-border-glow" id="menuBox">
+        <div class="menu-wrapper">
+            <div class="brand">🔥 FLU FF VIP v2</div>
+            
+            <div class="menu-content">
+                <!-- Aimbot -->
+                <div class="menu-item">
+                    <div class="item-left">
+                        <span class="icon">🎯</span>
+                        <span class="label">Chức năng Aimbot</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="aimbot" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <!-- FOV -->
+                <div class="fov-container">
+                    <div class="fov-header">
+                        <span>Phạm vi Vòng FOV</span>
+                        <span id="fovVal">100px</span>
+                    </div>
+                    <input type="range" id="fovSlider" class="range-slider" min="30" max="300" value="100">
+                    
+                    <div class="fov-header" style="margin-top: 5px;">
+                        <span style="color: #aaa;">Hiển thị vòng tròn FOV</span>
+                        <label class="switch">
+                            <input type="checkbox" id="drawFov" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- ESP -->
+                <div class="menu-item">
+                    <div class="item-left">
+                        <span class="icon">👁️</span>
+                        <span class="label">Bật định vị ESP (Khung/Line)</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="esp" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+
+                <!-- AntiBan -->
+                <div class="menu-item">
+                    <div class="item-left">
+                        <span class="icon">🛡️</span>
+                        <span class="label">Bảo mật AntiBan ẩn danh</span>
+                    </div>
+                    <label class="switch">
+                        <input type="checkbox" id="antiban" checked>
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const menuBox = document.getElementById('menuBox');
+        const hint = document.getElementById('hint');
+        const canvas = document.getElementById('fovCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const fovSlider = document.getElementById('fovSlider');
+        const fovVal = document.getElementById('fovVal');
+        const drawFovCheck = document.getElementById('drawFov');
+
+        // Căn chỉnh Canvas
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            drawFOV();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        setTimeout(resizeCanvas, 100);
+
+        // Vẽ vòng FOV
+        function drawFOV() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (drawFovCheck.checked) {
+                const centerX = canvas.width / 2;
+                const centerY = canvas.height / 2;
+                const radius = parseInt(fovSlider.value);
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
+                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = '#00f2fe';
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = '#00f2fe';
+                ctx.stroke();
+            }
+        }
+
+        fovSlider.addEventListener('input', (e) => {
+            fovVal.innerText = e.target.value + "px";
+            drawFOV();
+            sendDataToDylib("fov_size", e.target.value);
+        });
+
+        drawFovCheck.addEventListener('change', () => {
+            drawFOV();
+            sendDataToDylib("draw_fov", drawFovCheck.checked);
+        });
+
+        // Bắt tất cả checkbox
+        document.querySelectorAll('input[type="checkbox"]').forEach(item => {
+            item.addEventListener('change', () => {
+                sendDataToDylib(item.id, item.checked);
+            });
+        });
+
+        // Gửi dữ liệu sang dylib (nếu có)
+        function sendDataToDylib(featureId, value) {
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.FLUHandler) {
+                window.webkit.messageHandlers.FLUHandler.postMessage({
+                    feature: featureId,
+                    status: value
+                });
+            }
+        }
+
+        // Chạm 2 ngón để bật/tắt menu
+        window.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                menuBox.classList.toggle('active');
+                if (hint) hint.style.opacity = '0';
+            }
+        }, { passive: false });
+    </script>
+</body>
+</html>
